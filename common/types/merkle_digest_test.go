@@ -9,6 +9,7 @@ package types
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -124,6 +125,36 @@ func TestMerkleRootDigest(t *testing.T) {
 
 		assert.NotEqual(t, twoLeaves.MerkleRootDigest(), forged.MerkleRootDigest())
 	})
+}
+
+// Benchmark_DigestCrossover sweeps the batch size (number of requests, at a fixed request size)
+// to locate the crossover point: below it the sequential Digest is faster (the Merkle tree does
+// more total hashing work and, below parallelThreshold, does not even fan out); above it the
+// parallel MerkleRootDigest wins by spreading the work across cores. Compare the Linear and Merkle
+// ns/op at each "reqs=" size to read off where Merkle overtakes Digest on this machine.
+func Benchmark_DigestCrossover(b *testing.B) {
+	const reqSize = 300
+	for _, n := range []int{1, 10, 50, 100, 250, 500, 750, 1000, 2000, 4000, 8000, 16000} {
+		br := makeRandomRequests(n, reqSize)
+
+		b.Run(fmt.Sprintf("reqs=%05d/Linear", n), func(b *testing.B) {
+			b.ReportAllocs()
+			var d []byte
+			for i := 0; i < b.N; i++ {
+				d = br.Digest()
+			}
+			require.Len(b, d, 32)
+		})
+
+		b.Run(fmt.Sprintf("reqs=%05d/Merkle", n), func(b *testing.B) {
+			b.ReportAllocs()
+			var d []byte
+			for i := 0; i < b.N; i++ {
+				d = br.MerkleRootDigest()
+			}
+			require.Len(b, d, 32)
+		})
+	}
 }
 
 func Benchmark_DigestVsMerkleRoot(b *testing.B) {
