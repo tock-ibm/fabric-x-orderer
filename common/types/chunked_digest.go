@@ -33,13 +33,21 @@ const chunkParallelThreshold = 2
 // single 32-byte value and is not equal to Digest or MerkleRootDigest. An empty or nil batch
 // hashes to SHA256(nil).
 func (br *BatchedRequests) ChunkedDigest() []byte {
-	if br == nil || len(*br) == 0 {
+	if br == nil {
 		return sha256.New().Sum(nil)
 	}
+	return chunkedDigestK(*br, chunkDigestGroupSize)
+}
 
-	reqs := *br
+// chunkedDigestK is the K-parameterized core of ChunkedDigest. K is the number of requests per
+// first-level group; ChunkedDigest fixes it at chunkDigestGroupSize. It is exposed (unexported)
+// so benchmarks can sweep K to find the optimal group size.
+func chunkedDigestK(reqs BatchedRequests, k int) []byte {
 	n := len(reqs)
-	numGroups := (n + chunkDigestGroupSize - 1) / chunkDigestGroupSize
+	if n == 0 {
+		return sha256.New().Sum(nil)
+	}
+	numGroups := (n + k - 1) / k
 
 	// Level 1: one group digest per K requests, written into a shared backing array (disjoint
 	// slots, no locking), computed in parallel.
@@ -48,8 +56,8 @@ func (br *BatchedRequests) ChunkedDigest() []byte {
 		h := sha256.New()           // one hasher per worker, reused across its groups via Reset
 		sizeBuff := make([]byte, 4) // one length buffer per worker
 		for g := start; g < end; g++ {
-			lo := g * chunkDigestGroupSize
-			hi := min(lo+chunkDigestGroupSize, n)
+			lo := g * k
+			hi := min(lo+k, n)
 			h.Reset()
 			for _, r := range reqs[lo:hi] {
 				binary.BigEndian.PutUint32(sizeBuff, uint32(len(r)))
