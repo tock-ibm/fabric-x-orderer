@@ -154,6 +154,15 @@ func Benchmark_DigestCrossover(b *testing.B) {
 			}
 			require.Len(b, d, 32)
 		})
+
+		b.Run(fmt.Sprintf("reqs=%05d/Chunked", n), func(b *testing.B) {
+			b.ReportAllocs()
+			var d []byte
+			for i := 0; i < b.N; i++ {
+				d = br.ChunkedDigest()
+			}
+			require.Len(b, d, 32)
+		})
 	}
 }
 
@@ -174,6 +183,15 @@ func Benchmark_DigestVsMerkleRoot(b *testing.B) {
 		var d []byte
 		for i := 0; i < b.N; i++ {
 			d = br.MerkleRootDigest()
+		}
+		require.Len(b, d, 32)
+	})
+
+	b.Run("Chunked", func(b *testing.B) {
+		b.ReportAllocs()
+		var d []byte
+		for i := 0; i < b.N; i++ {
+			d = br.ChunkedDigest()
 		}
 		require.Len(b, d, 32)
 	})

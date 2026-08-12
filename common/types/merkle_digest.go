@@ -107,12 +107,19 @@ func reduceLevel(level [][]byte) [][]byte {
 // forEachRange invokes work over contiguous, disjoint index ranges covering [0, n), using up to
 // runtime.NumCPU() goroutines. For small n (or a single CPU) it runs inline on the caller.
 func forEachRange(n int, work func(start, end int)) {
+	forEachRangeThreshold(n, parallelThreshold, work)
+}
+
+// forEachRangeThreshold is forEachRange with an explicit minimum n at which it fans out to
+// goroutines; below threshold (or on a single CPU) it runs inline on the caller. Use a small
+// threshold when each unit of work is heavy, a large one when each unit is tiny.
+func forEachRangeThreshold(n, threshold int, work func(start, end int)) {
 	if n == 0 {
 		return
 	}
 
 	workers := runtime.NumCPU()
-	if n < parallelThreshold || workers <= 1 {
+	if n < threshold || workers <= 1 {
 		work(0, n)
 		return
 	}
